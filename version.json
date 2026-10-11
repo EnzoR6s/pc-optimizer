@@ -1,9 +1,9 @@
 {
-  "version": "4.3.0",
-  "notes": "Updates now install automatically when the app opens (can be turned off in Settings).",
+  "version": "4.4.0",
+  "notes": "New Monitor page: live CPU/GPU usage, temps, RAM and network with avg, 1% low, 0.1% low, min and max, plus a Reset button for a clean session. Version now shows in the sidebar.",
   "files": {
-    "PC_Optimizer.ps1": "3a227e65050d504e637d17bb064309cbf2934045f4e233454e6644ad06fb15f8",
-    "Setup.ps1": "d6828653b0f785f9cbb22a35a158909b36f5e9814943f86169e4699267003537",
+    "PC_Optimizer.ps1": "867c5b99cb8815421da095baa3db47259e85ad5cfb58c623294154ca08eb10dc",
+    "Setup.ps1": "e2d4edd3f98f9dc557ceb059da4e3f9d10468b98e106de98611c757dba5f55cc",
     "Uninstall.ps1": "23edafaad26f943cedfba4b9089fb0daf29219388eb441386db69c8a0ab50f22",
     "PC_Optimizer.ico": "54a660f8fd0eb4957815786048cac75dab2d474813fedd35ee10402c7d130859"
   }

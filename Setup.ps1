@@ -102,7 +102,7 @@ namespace PCOpt
 
 function Say([string]$text, [string]$icon = 'Information') { [void][System.Windows.MessageBox]::Show($text, 'PC Optimizer Setup', 'OK', $icon) }
 
-$version = '4.3.0'
+$version = '4.4.0'
 $src     = $PSScriptRoot
 $dest    = Join-Path $env:ProgramFiles 'PC Optimizer'
 $exe     = Join-Path $dest 'PC Optimizer.exe'
@@ -160,8 +160,8 @@ using System.Windows.Forms;
 [assembly: AssemblyTitle("PC Optimizer")]
 [assembly: AssemblyProduct("PC Optimizer")]
 [assembly: AssemblyDescription("PC Optimizer")]
-[assembly: AssemblyVersion("4.3.0.0")]
-[assembly: AssemblyFileVersion("4.3.0.0")]
+[assembly: AssemblyVersion("4.4.0.0")]
+[assembly: AssemblyFileVersion("4.4.0.0")]
 
 namespace PCOptimizer
 {

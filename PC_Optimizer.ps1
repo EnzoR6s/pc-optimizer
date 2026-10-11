@@ -11,7 +11,7 @@ param(
     [switch]$AutoClean      # used by the weekly auto-clean task (no window)
 )
 
-$AppVersion = '4.3.0'
+$AppVersion = '4.4.0'
 $DefaultRepo = 'EnzoR6s/pc-optimizer'   # where every copy gets its updates
 
 # ---------------------------------------------------------------
@@ -214,6 +214,8 @@ $sync.RpDone       = $false
 $sync.RpSkip       = $false
 $sync.AskContinue  = $null
 $sync.ForceRefresh = $false
+$sync.MonReset     = $false
+$sync.MonPaused    = $false
 $sync.PingSeq      = 0
 $sync.Ping         = $null
 $sync.Results      = [hashtable]::Synchronized(@{})
@@ -574,6 +576,31 @@ $xaml = @'
       <Setter Property="Padding" Value="10,8"/>
       <Setter Property="FontSize" Value="13"/>
     </Style>
+    <DataTemplate x:Key="MonRowTpl">
+      <Border Background="#2C335A" CornerRadius="10" Padding="12,9" Margin="0,0,0,6">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="2.2*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+          <StackPanel Grid.Column="0" Orientation="Horizontal">
+            <Ellipse Width="9" Height="9" Fill="{Binding Dot}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <TextBlock Text="{Binding Metric}" VerticalAlignment="Center"/>
+          </StackPanel>
+          <TextBlock Grid.Column="1" Text="{Binding Now}" HorizontalAlignment="Right" FontWeight="SemiBold" VerticalAlignment="Center"/>
+          <TextBlock Grid.Column="2" Text="{Binding Avg}" HorizontalAlignment="Right" Foreground="#C9CCE6" VerticalAlignment="Center"/>
+          <TextBlock Grid.Column="3" Text="{Binding Min}" HorizontalAlignment="Right" Foreground="#8B91B7" VerticalAlignment="Center"/>
+          <TextBlock Grid.Column="4" Text="{Binding P1}" HorizontalAlignment="Right" Foreground="#8B91B7" VerticalAlignment="Center"/>
+          <TextBlock Grid.Column="5" Text="{Binding P01}" HorizontalAlignment="Right" Foreground="#8B91B7" VerticalAlignment="Center"/>
+          <TextBlock Grid.Column="6" Text="{Binding Max}" HorizontalAlignment="Right" Foreground="#FF9ABf" VerticalAlignment="Center"/>
+        </Grid>
+      </Border>
+    </DataTemplate>
   </Window.Resources>
 
   <Grid Margin="16">
@@ -601,7 +628,7 @@ $xaml = @'
               </Grid>
               <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
                 <TextBlock Text="PC Optimizer" FontSize="17" FontWeight="SemiBold"/>
-                <TextBlock Text="Admin mode" FontSize="12" Foreground="{StaticResource Muted}"/>
+                <TextBlock x:Name="SideSub" Text="Admin mode" FontSize="12" Foreground="{StaticResource Muted}"/>
               </StackPanel>
             </StackPanel>
 
@@ -634,6 +661,7 @@ $xaml = @'
 
             <StackPanel>
               <RadioButton x:Name="NavDash" Style="{StaticResource Nav}" Tag="&#xE80F;" Content="Dashboard" IsChecked="True"/>
+              <RadioButton x:Name="NavMon" Style="{StaticResource Nav}" Tag="&#xE9D2;" Content="Monitor"/>
               <RadioButton x:Name="NavGame" Style="{StaticResource Nav}" Tag="&#xE7FC;" Content="Gaming"/>
               <RadioButton x:Name="NavNet" Style="{StaticResource Nav}" Tag="&#xE774;" Content="Network"/>
               <RadioButton x:Name="NavSys" Style="{StaticResource Nav}" Tag="&#xE770;" Content="System"/>
@@ -820,6 +848,52 @@ $xaml = @'
                       <TextBlock Grid.Row="1" Text="DNS" Style="{StaticResource Lbl}"/>
                       <TextBlock x:Name="CnDns" Grid.Row="1" Grid.Column="1" Text="..." VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                     </Grid>
+                  </StackPanel>
+                </Border>
+              </Grid>
+            </ScrollViewer>
+
+            <!-- ============ MONITOR ============ -->
+            <ScrollViewer x:Name="PageMon" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+              <Grid Margin="16,0,16,8">
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto"/>
+                  <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Style="{StaticResource CardStyle}">
+                  <StackPanel>
+                    <DockPanel Margin="0,0,0,4">
+                      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <TextBlock x:Name="MonElapsed" Text="" Style="{StaticResource Lbl}" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <Button x:Name="MonReset" Style="{StaticResource PillAccent}" Margin="0,0,8,0" Content="Reset session"/>
+                        <Button x:Name="MonPause" Style="{StaticResource Pill}" Margin="0" Content="Pause"/>
+                      </StackPanel>
+                      <TextBlock Text="&#xE9D2;" Style="{StaticResource Ico}" Margin="0,0,10,0"/>
+                      <TextBlock Text="Performance monitor" Style="{StaticResource CardTitle}"/>
+                    </DockPanel>
+                    <TextBlock Text="Live readings with the stats since you last hit Reset. 1% low / 0.1% low = the average of the lowest readings; Max = the peak. Hit Reset, play a game, then come back to see the session." Style="{StaticResource Lbl}" FontSize="12" Margin="0,0,0,12"/>
+
+                    <Grid Margin="12,0,12,6">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2.2*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                      </Grid.ColumnDefinitions>
+                      <TextBlock Grid.Column="0" Text="METRIC" FontSize="11" Foreground="{StaticResource Muted}"/>
+                      <TextBlock Grid.Column="1" Text="NOW" FontSize="11" Foreground="{StaticResource Muted}" HorizontalAlignment="Right"/>
+                      <TextBlock Grid.Column="2" Text="AVG" FontSize="11" Foreground="{StaticResource Muted}" HorizontalAlignment="Right"/>
+                      <TextBlock Grid.Column="3" Text="MIN" FontSize="11" Foreground="{StaticResource Muted}" HorizontalAlignment="Right"/>
+                      <TextBlock Grid.Column="4" Text="1% LOW" FontSize="11" Foreground="{StaticResource Muted}" HorizontalAlignment="Right"/>
+                      <TextBlock Grid.Column="5" Text="0.1% LOW" FontSize="11" Foreground="{StaticResource Muted}" HorizontalAlignment="Right"/>
+                      <TextBlock Grid.Column="6" Text="MAX" FontSize="11" Foreground="{StaticResource Muted}" HorizontalAlignment="Right"/>
+                    </Grid>
+                    <ItemsControl x:Name="MonList" ItemTemplate="{StaticResource MonRowTpl}"/>
+                    <TextBlock x:Name="MonNote" Text="" Style="{StaticResource Lbl}" FontSize="11" Margin="2,8,0,0"/>
                   </StackPanel>
                 </Border>
               </Grid>
@@ -2391,53 +2465,128 @@ try {
         if ($v -and ($v / 1MB) -gt $vramTotal) { $vramTotal = [double]$v / 1MB }
     }
 } catch {}
+
+# rolling history for the performance monitor (one sample per second, since last Reset)
+$hist = @{ cpu = [Collections.Generic.List[double]]::new(); cput = [Collections.Generic.List[double]]::new(); gpu = [Collections.Generic.List[double]]::new(); gput = [Collections.Generic.List[double]]::new(); ram = [Collections.Generic.List[double]]::new(); dn = [Collections.Generic.List[double]]::new(); up = [Collections.Generic.List[double]]::new(); png = [Collections.Generic.List[double]]::new() }
+$cap = 7200
+$monStart = Get-Date
+$prevRx = $null; $prevTx = $null; $prevT = $null; $netName = $null; $netT = -99
+function MonStat($vals, $hi) {
+    $n = $vals.Count; if ($n -eq 0) { return $null }
+    $sorted = [double[]]@($vals); [Array]::Sort($sorted)
+    $sum = 0.0; foreach ($x in $sorted) { $sum += $x }
+    $c1 = [math]::Max(1, [int][math]::Floor($n * 0.01)); $c01 = [math]::Max(1, [int][math]::Floor($n * 0.001))
+    # "low" = worst dips (bottom of the range); for ping/usage the bad case is high, so flip with $hi
+    if ($hi) { $lo1 = $sorted[($n - $c1)..($n - 1)]; $lo01 = $sorted[($n - $c01)..($n - 1)] }
+    else { $lo1 = $sorted[0..($c1 - 1)]; $lo01 = $sorted[0..($c01 - 1)] }
+    [pscustomobject]@{ Avg = $sum / $n; Min = $sorted[0]; Max = $sorted[-1]; P1 = (($lo1 | Measure-Object -Average).Average); P01 = (($lo01 | Measure-Object -Average).Average) }
+}
+function Row($metric, $dot, $list, $now, $fmt, $hi) {
+    $st = MonStat $list $hi
+    $f = { param($x) if ($null -eq $x) { 'n/a' } else { ($fmt -f $x) } }
+    if (-not $st) { return [pscustomobject]@{ Metric = $metric; Dot = $dot; Now = (& $f $now); Avg = '--'; Min = '--'; P1 = '--'; P01 = '--'; Max = '--' } }
+    [pscustomobject]@{ Metric = $metric; Dot = $dot; Now = (& $f $now); Avg = (& $f $st.Avg); Min = (& $f $st.Min); P1 = (& $f $st.P1); P01 = (& $f $st.P01); Max = (& $f $st.Max) }
+}
+
 while ($sync.Running) {
     if ($sync.ForceRefresh) { $i = 0; $sync.ForceRefresh = $false }
+    if ($sync.MonReset) { foreach ($kk in @($hist.Keys)) { $hist[$kk].Clear() }; $monStart = Get-Date; $sync.MonReset = $false }
     try { $r = $p.Send('1.1.1.1', 1000); if ($r.Status -eq 'Success') { $sync.Ping = [int]$r.RoundtripTime } else { $sync.Ping = -1 } } catch { $sync.Ping = -1 }
     $sync.PingSeq++
+
+    $cpuNow = $null
+    try { $cpuNow = [int](Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'").PercentProcessorTime; $sync.Cpu = $cpuNow } catch {}
+    $ramPct = $null
+    try {
+        $os = Get-CimInstance Win32_OperatingSystem
+        $sync.RamTotal = [math]::Round($os.TotalVisibleMemorySize / 1MB, 1)
+        $sync.RamUsed  = [math]::Round(($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / 1MB, 1)
+        $ramPct = [math]::Round(($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / $os.TotalVisibleMemorySize * 100, 1)
+    } catch {}
     if ($i % 2 -eq 0) {
-        try { $sync.Cpu = [int](Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'").PercentProcessorTime } catch {}
-        try {
-            $os = Get-CimInstance Win32_OperatingSystem
-            $sync.RamTotal = [math]::Round($os.TotalVisibleMemorySize / 1MB, 1)
-            $sync.RamUsed  = [math]::Round(($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / 1MB, 1)
-        } catch {}
         try {
             $d = [IO.DriveInfo]::new($env:SystemDrive)
-            $sync.DiskTotal = [math]::Round($d.TotalSize / 1GB)
-            $sync.DiskFree  = [math]::Round($d.AvailableFreeSpace / 1GB, 1)
-        } catch {}
-        # graphics card
-        try {
-            if ($hasSmi) {
-                $l = @(& $nvsmi --query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total,clocks.gr,power.draw --format=csv,noheader,nounits 2>$null)[0]
-                $f = @($l -split ',\s*')
-                if ($f.Count -ge 7) {
-                    $sync.Gpu = @{ Src = 'nvidia'; Name = $f[0]; Temp = ($f[1] -as [int]); Load = ($f[2] -as [int]); MemUsed = ($f[3] -as [double]); MemTotal = ($f[4] -as [double]); Clock = ($f[5] -as [int]); Power = ($f[6] -as [double]) }
-                }
-            } else {
-                $eng = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -ErrorAction Stop | Where-Object { $_.Name -like '*engtype_3D*' })
-                $load = [math]::Min(100, [double](($eng | Measure-Object UtilizationPercentage -Sum).Sum))
-                $mem = [double]((Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory -ErrorAction Stop | Measure-Object DedicatedUsage -Maximum).Maximum) / 1MB
-                $sync.Gpu = @{ Src = 'counters'; Name = $gpuName; Temp = $null; Load = [int]$load; MemUsed = $mem; MemTotal = $vramTotal; Clock = $null; Power = $null }
-            }
+            $sync.DiskTotal = [math]::Round($d.TotalSize / 1GB); $sync.DiskFree = [math]::Round($d.AvailableFreeSpace / 1GB, 1)
         } catch {}
     }
+    # graphics card
+    $gpuLoad = $null; $gpuTemp = $null
+    try {
+        if ($hasSmi) {
+            $l = @(& $nvsmi --query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total,clocks.gr,power.draw --format=csv,noheader,nounits 2>$null)[0]
+            $f = @($l -split ',\s*')
+            if ($f.Count -ge 7) {
+                $gpuLoad = $f[2] -as [int]; $gpuTemp = $f[1] -as [int]
+                $sync.Gpu = @{ Src = 'nvidia'; Name = $f[0]; Temp = $gpuTemp; Load = $gpuLoad; MemUsed = ($f[3] -as [double]); MemTotal = ($f[4] -as [double]); Clock = ($f[5] -as [int]); Power = ($f[6] -as [double]) }
+            }
+        } else {
+            $eng = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -ErrorAction Stop | Where-Object { $_.Name -like '*engtype_3D*' })
+            $gpuLoad = [int][math]::Min(100, [double](($eng | Measure-Object UtilizationPercentage -Sum).Sum))
+            $mem = [double]((Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory -ErrorAction Stop | Measure-Object DedicatedUsage -Maximum).Maximum) / 1MB
+            $sync.Gpu = @{ Src = 'counters'; Name = $gpuName; Temp = $null; Load = $gpuLoad; MemUsed = $mem; MemTotal = $vramTotal; Clock = $null; Power = $null }
+        }
+    } catch {}
+    # network throughput (Mbps) from the active adapter's byte counters
+    $dnMbps = $null; $upMbps = $null
+    try {
+        if (-not $netName -or ($i - $netT) -ge 30) { $na = Get-NetAdapter -Physical | Where-Object Status -eq 'Up' | Select-Object -First 1; if ($na) { $netName = $na.Name }; $netT = $i }
+        if ($netName) {
+            $st = Get-NetAdapterStatistics -Name $netName -ErrorAction Stop
+            $now = Get-Date
+            if ($null -ne $prevRx -and $prevT) {
+                $secs = ($now - $prevT).TotalSeconds
+                if ($secs -gt 0.2) {
+                    $dnMbps = [math]::Round([math]::Max(0, ($st.ReceivedBytes - $prevRx)) * 8 / $secs / 1e6, 1)
+                    $upMbps = [math]::Round([math]::Max(0, ($st.SentBytes - $prevTx)) * 8 / $secs / 1e6, 1)
+                }
+            }
+            $prevRx = $st.ReceivedBytes; $prevTx = $st.SentBytes; $prevT = $now
+        }
+    } catch {}
+
     if ($i % 10 -eq 0) {
         try {
             $a = Get-NetAdapter -Physical | Where-Object Status -eq 'Up' | Select-Object -First 1
-            if ($a) {
-                $sync.Adapter = "$($a.Name)  ($($a.LinkSpeed))"
-                $sync.Dns = (@((Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4).ServerAddresses) -join ', ')
-            } else { $sync.Adapter = 'Offline'; $sync.Dns = '-' }
+            if ($a) { $sync.Adapter = "$($a.Name)  ($($a.LinkSpeed))"; $sync.Dns = (@((Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4).ServerAddresses) -join ', ') }
+            else { $sync.Adapter = 'Offline'; $sync.Dns = '-' }
         } catch {}
         try { $l = (powercfg.exe /getactivescheme) -join ' '; if ($l -match '\(([^)]+)\)') { $sync.Plan = $Matches[1] } } catch {}
-        # CPU temperature: only what the motherboard reports to Windows (many boards report nothing)
         try {
             $tz = @(Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction Stop | Where-Object { $_.CurrentTemperature -gt 2732 })
             if ($tz.Count) { $sync.CpuTemp = [int](($tz | Measure-Object CurrentTemperature -Maximum).Maximum / 10 - 273.15) } else { $sync.CpuTemp = $null }
         } catch { $sync.CpuTemp = $null }
     }
+
+    # record history (skip the warm-up second where net delta is still null)
+    if (-not $sync.MonPaused) {
+        $cpuT = $sync.CpuTemp
+        if ($null -ne $cpuNow) { $hist.cpu.Add([double]$cpuNow) }
+        if ($null -ne $cpuT) { $hist.cput.Add([double]$cpuT) }
+        if ($null -ne $gpuLoad) { $hist.gpu.Add([double]$gpuLoad) }
+        if ($null -ne $gpuTemp) { $hist.gput.Add([double]$gpuTemp) }
+        if ($null -ne $ramPct) { $hist.ram.Add([double]$ramPct) }
+        if ($null -ne $dnMbps) { $hist.dn.Add([double]$dnMbps) }
+        if ($null -ne $upMbps) { $hist.up.Add([double]$upMbps) }
+        if ($sync.Ping -ge 0) { $hist.png.Add([double]$sync.Ping) }
+        foreach ($kk in @($hist.Keys)) { if ($hist[$kk].Count -gt $cap) { $hist[$kk].RemoveRange(0, $hist[$kk].Count - $cap) } }
+    }
+
+    # publish the stats table ~ every second
+    $pingNow = $null; if ($sync.Ping -ge 0) { $pingNow = $sync.Ping }
+    $rows = @(
+        Row 'CPU usage'   '#33E6FF' $hist.cpu  $cpuNow  '{0:N0}%'    $false
+        Row 'CPU temp'    '#FF6FA8' $hist.cput $sync.CpuTemp "{0:N0}$([char]0x00B0)C" $false
+        Row 'GPU usage'   '#8C7BFF' $hist.gpu  $gpuLoad '{0:N0}%'    $false
+        Row 'GPU temp'    '#FF9ABF' $hist.gput $gpuTemp "{0:N0}$([char]0x00B0)C" $false
+        Row 'RAM usage'   '#B79BFF' $hist.ram  $ramPct  '{0:N0}%'    $false
+        Row 'Download'    '#4BE3A6' $hist.dn   $dnMbps  '{0:N1} Mbps' $false
+        Row 'Upload'      '#FFC857' $hist.up   $upMbps  '{0:N1} Mbps' $false
+        Row 'Ping'        '#FF5C7A' $hist.png  $pingNow '{0:N0} ms'  $false
+    )
+    $sync.MonStats = $rows
+    $sync.MonCount = $hist.cpu.Count
+    $sync.MonElapsed = [int]((Get-Date) - $monStart).TotalSeconds
+
     $i++
     Start-Sleep -Milliseconds 1000
 }
@@ -2796,9 +2945,10 @@ function Show-Main {
 }
 
 function Show-Page([string]$p) {
-    foreach ($pg in $PageDash, $PageGame, $PageNet, $PageSys, $PageTools, $PageAct, $PageSet) { $pg.Visibility = 'Collapsed' }
+    foreach ($pg in $PageDash, $PageMon, $PageGame, $PageNet, $PageSys, $PageTools, $PageAct, $PageSet) { $pg.Visibility = 'Collapsed' }
     switch ($p) {
         'dash' { $PageDash.Visibility = 'Visible'; $PageTitle.Text = 'Dashboard' }
+        'mon'  { $PageMon.Visibility = 'Visible'; $PageTitle.Text = 'Monitor' }
         'game' {
             $PageGame.Visibility = 'Visible'; $PageTitle.Text = 'Gaming'
             if (-not $script:GameLoaded) { $script:GameLoaded = $true; Update-PresetUI }
@@ -3056,6 +3206,14 @@ function Update-UI {
         if (-not $win.IsVisible) { Check-Updates -Silent -Auto }
     }
 
+    # 6cc. performance monitor table
+    if ($PageMon.Visibility -eq 'Visible' -and $sync.MonStats) {
+        $MonList.ItemsSource = $sync.MonStats
+        $el = [int]$sync.MonElapsed; $mm = [int]($el / 60); $ss = $el % 60
+        $MonElapsed.Text = ('{0} samples  -  {1}m {2}s' -f [int]$sync.MonCount, $mm, $ss)
+        $MonNote.Text = if ($sync.MonPaused) { 'Paused. Readings are frozen; hit Resume to keep recording.' } else { 'Recording since Reset. 1% low / 0.1% low = average of the lowest readings, Max = the peak. CPU temp needs motherboard support; GPU temp needs an NVIDIA card.' }
+    }
+
     # 6d. someone opened the app again -> bring this window up
     if ($script:ShowEvent.WaitOne(0)) { Show-Main }
 
@@ -3261,6 +3419,12 @@ $ActShortcut.Add_Click({ try { New-DesktopShortcut; Set-Status 'Desktop shortcut
 $PingCanvas.Add_SizeChanged({ Draw-Chart })
 
 # ---- Gaming page ----
+$NavMon.Add_Checked({ Show-Page 'mon' })
+$MonReset.Add_Click({ $sync.MonReset = $true; Set-Status 'Monitor session reset.' })
+$MonPause.Add_Click({
+    if ($sync.MonPaused) { $sync.MonPaused = $false; $MonPause.Content = 'Pause' }
+    else { $sync.MonPaused = $true; $MonPause.Content = 'Resume' }
+})
 $NavGame.Add_Checked({ Show-Page 'game' })
 $GpPerf.Add_Click({ Apply-Preset 'Performance' })
 $GpBal.Add_Click({ Apply-Preset 'Balanced' })
@@ -3395,6 +3559,7 @@ $win.Add_Closed({
 try { Write-SecureLog ('===== App started on {0} =====' -f $env:COMPUTERNAME) } catch {}
 $queue.Enqueue("PC Optimizer $AppVersion ready. Every change goes in the encrypted change log (Activity > Change log).")
 $sync.Plan = Get-PlanName
+$SideSub.Text = "Admin mode  -  v$AppVersion"
 Update-PlanUI
 Show-Page 'dash'
 Set-Arc $GpuTrack 99.9
