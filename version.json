@@ -1,9 +1,9 @@
 {
-  "version": "4.2.0",
-  "notes": "Gaming page (GPU monitor + NVIDIA/AMD presets), process manager, speed test, Tools page (app updates, disk space, LAN scan, security check), tray, start with Windows, weekly auto-clean, remote updates.",
+  "version": "4.3.0",
+  "notes": "Updates now install automatically when the app opens (can be turned off in Settings).",
   "files": {
-    "PC_Optimizer.ps1": "35bcd2b0e4a572c81a73f4ea4c15481d5f3d171d88075a1d208cd1b4381723ad",
-    "Setup.ps1": "3ef576d98c0feaf7bdf31aaa54494da53401b4b4103eaf51869ff62838dd4a00",
+    "PC_Optimizer.ps1": "3a227e65050d504e637d17bb064309cbf2934045f4e233454e6644ad06fb15f8",
+    "Setup.ps1": "d6828653b0f785f9cbb22a35a158909b36f5e9814943f86169e4699267003537",
     "Uninstall.ps1": "23edafaad26f943cedfba4b9089fb0daf29219388eb441386db69c8a0ab50f22",
     "PC_Optimizer.ico": "54a660f8fd0eb4957815786048cac75dab2d474813fedd35ee10402c7d130859"
   }

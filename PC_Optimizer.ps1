@@ -11,7 +11,8 @@ param(
     [switch]$AutoClean      # used by the weekly auto-clean task (no window)
 )
 
-$AppVersion = '4.2.0'
+$AppVersion = '4.3.0'
+$DefaultRepo = 'EnzoR6s/pc-optimizer'   # where every copy gets its updates
 
 # ---------------------------------------------------------------
 #  Admin + STA check (relaunch if needed)
@@ -173,11 +174,15 @@ trap {
 # Settings file (in Program Files, so only admins can change it)
 $cfgFile = Join-Path $PSScriptRoot 'config.json'
 function Load-Config {
-    $d = [pscustomobject]@{ UpdateRepo = ''; AutoCheckUpdates = $true; CloseToTray = $true; CleanDay = 'Sunday'; CleanTime = '03:00'; LastPreset = '' }
+    $d = [pscustomobject]@{ UpdateRepo = $DefaultRepo; AutoCheckUpdates = $true; AutoInstallUpdates = $true; CloseToTray = $true; CleanDay = 'Sunday'; CleanTime = '03:00'; LastPreset = ''; LastRunVersion = '' }
     if (Test-Path -LiteralPath $cfgFile) {
         try {
             $j = Get-Content -LiteralPath $cfgFile -Raw | ConvertFrom-Json
-            foreach ($p in $d.PSObject.Properties.Name) { if ($null -ne $j.$p) { $d.$p = $j.$p } }
+            foreach ($p in $d.PSObject.Properties.Name) {
+                if ($null -eq $j.$p) { continue }
+                if ($p -eq 'UpdateRepo' -and -not [string]$j.$p) { continue }   # blank = use the built-in repo
+                $d.$p = $j.$p
+            }
         } catch {}
     }
     return $d
@@ -1363,7 +1368,14 @@ $xaml = @'
                       <CheckBox x:Name="SetAutoUpd" DockPanel.Dock="Left" Style="{StaticResource Chk}" Margin="0,0,14,0" VerticalAlignment="Top"/>
                       <StackPanel>
                         <TextBlock Text="Check for updates when the app opens"/>
-                        <TextBlock Text="Only checks. You choose when to install." Style="{StaticResource Lbl}" FontSize="12"/>
+                        <TextBlock Text="Also checks every few hours while it sits in the tray." Style="{StaticResource Lbl}" FontSize="12"/>
+                      </StackPanel>
+                    </DockPanel>
+                    <DockPanel Margin="0,14,0,0">
+                      <CheckBox x:Name="SetAutoInstall" DockPanel.Dock="Left" Style="{StaticResource Chk}" Margin="0,0,14,0" VerticalAlignment="Top"/>
+                      <StackPanel>
+                        <TextBlock Text="Install updates automatically"/>
+                        <TextBlock Text="New versions install by themselves and the app reopens in a few seconds. Turn off to get an Update button instead." Style="{StaticResource Lbl}" FontSize="12"/>
                       </StackPanel>
                     </DockPanel>
                   </StackPanel>
@@ -1952,7 +1964,9 @@ foreach ($ps1 in (Get-ChildItem -LiteralPath $stage -Filter *.ps1)) {
 }
 Done ("Update {0} downloaded and verified - installing now. The app will reopen." -f $j.version)
 Start-Sleep -Seconds 2
-Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$stage\Setup.ps1`"", '-Silent')
+$setupArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$stage\Setup.ps1`"", '-Silent')
+if ($tray) { $setupArgs += '-Tray' }
+Start-Process -FilePath 'powershell.exe' -ArgumentList $setupArgs
 '@
 
 $Tasks.runall = "Log '>>> Step 1 of 4: network'`n" + $Tasks.network +
@@ -2724,6 +2738,7 @@ function Set-CleanTask([bool]$on) {
 function Load-SettingsUI {
     $SetTray.IsChecked = [bool]$script:cfg.CloseToTray
     $SetAutoUpd.IsChecked = [bool]$script:cfg.AutoCheckUpdates
+    $SetAutoInstall.IsChecked = [bool]$script:cfg.AutoInstallUpdates
     $SetStartup.IsChecked = Test-AppTask 'Start with Windows'
     $cleanOn = Test-AppTask 'Weekly auto-clean'
     $SetClean.IsChecked = $cleanOn
@@ -2736,7 +2751,10 @@ function Load-SettingsUI {
 
 # ---- updates ----
 $script:UpdInfo = $null
-function Check-Updates([switch]$Silent) {
+$script:UpdAuto = $false
+$script:PendingAutoUpdate = $false
+function Check-Updates([switch]$Silent, [switch]$Auto) {
+    $script:UpdAuto = [bool]$Auto
     $repo = [string]$script:cfg.UpdateRepo
     if (-not $repo) { if (-not $Silent) { $SetUpdStatus.Text = 'Add your GitHub repo above first (example: yourname/pc-optimizer).' }; return }
     if (-not $Silent) { $SetUpdStatus.Text = "Checking $repo ..." }
@@ -2745,8 +2763,16 @@ function Check-Updates([switch]$Silent) {
 function Start-AppUpdate {
     if (-not $script:UpdInfo) { return }
     if (Ask ("Update PC Optimizer from $AppVersion to $($script:UpdInfo.Version)?`n`n$($script:UpdInfo.Notes)`n`nThe app closes for a few seconds and reopens by itself.")) {
-        Start-Task 'update' @{ updRepo = [string]$script:cfg.UpdateRepo }
+        Start-Task 'update' @{ updRepo = [string]$script:cfg.UpdateRepo; tray = $false }
     }
+}
+function Start-AutoUpdate {
+    if (-not $script:UpdInfo) { return }
+    if ($sync.Busy) { $script:PendingAutoUpdate = $true; return }   # wait for the current job to finish
+    $script:PendingAutoUpdate = $false
+    $queue.Enqueue("Updating to version $($script:UpdInfo.Version) automatically...")
+    Set-Status "Updating to version $($script:UpdInfo.Version)... the app will reopen in a few seconds."
+    Start-Task 'update' @{ updRepo = [string]$script:cfg.UpdateRepo; tray = (-not $win.IsVisible) }
 }
 
 # ---- tray icon ----
@@ -2966,7 +2992,8 @@ function Update-UI {
                 elseif ($v.Newer) {
                     $script:UpdInfo = $v
                     $SetUpdStatus.Text = "Version $($v.Version) is available. $($v.Notes)"
-                    $SetUpdNow.Visibility = 'Visible'; $UpdBanner.Visibility = 'Visible'; $UpdBannerText.Text = "v$($v.Version) - click to install"
+                    if ($script:UpdAuto -and $script:cfg.AutoInstallUpdates) { Start-AutoUpdate }
+                    else { $SetUpdNow.Visibility = 'Visible'; $UpdBanner.Visibility = 'Visible'; $UpdBannerText.Text = "v$($v.Version) - click to install" }
                 } else { $SetUpdStatus.Text = "You're on the latest version ($AppVersion)."; $SetUpdNow.Visibility = 'Collapsed'; $UpdBanner.Visibility = 'Collapsed' }
             }
             default {
@@ -3021,6 +3048,13 @@ function Update-UI {
     if ($sync.DiskProgress) { $DsNote.Text = [string]$sync.DiskProgress }
     if ($sync.LanProgress) { $LanNote.Text = [string]$sync.LanProgress }
     if ($sync.SecProgress) { $SecNote.Text = [string]$sync.SecProgress }
+
+    # 6e. auto-update waiting for a job to finish, and a check every 6 hours
+    if ($script:PendingAutoUpdate -and -not $sync.Busy) { Start-AutoUpdate }
+    if ($script:cfg.AutoCheckUpdates -and ((Get-Date) - $script:LastUpdCheck).TotalHours -ge 6) {
+        $script:LastUpdCheck = Get-Date
+        if (-not $win.IsVisible) { Check-Updates -Silent -Auto }
+    }
 
     # 6d. someone opened the app again -> bring this window up
     if ($script:ShowEvent.WaitOne(0)) { Show-Main }
@@ -3300,6 +3334,7 @@ $SecOpen.Add_Click({ Start-Process 'windowsdefender:' })
 $NavSet.Add_Checked({ Show-Page 'set' })
 $SetTray.Add_Click({ $script:cfg.CloseToTray = [bool]$SetTray.IsChecked; Save-Config })
 $SetAutoUpd.Add_Click({ $script:cfg.AutoCheckUpdates = [bool]$SetAutoUpd.IsChecked; Save-Config })
+$SetAutoInstall.Add_Click({ $script:cfg.AutoInstallUpdates = [bool]$SetAutoInstall.IsChecked; Save-Config })
 $SetStartup.Add_Click({
     try { Set-StartupTask ([bool]$SetStartup.IsChecked) }
     catch { $SetStartup.IsChecked = -not $SetStartup.IsChecked; Set-Status "Couldn't change startup: $($_.Exception.Message)" }
@@ -3366,7 +3401,17 @@ Set-Arc $GpuTrack 99.9
 Set-Arc $VramTrack 99.9
 Start-Runner ($Prelude + "`n" + $Monitor) $null
 Start-Quick 'gpu'
-if ($script:cfg.AutoCheckUpdates -and $script:cfg.UpdateRepo) { Check-Updates -Silent }
+$script:LastUpdCheck = Get-Date
+if ($script:cfg.AutoCheckUpdates -and $script:cfg.UpdateRepo) { Check-Updates -Silent -Auto }
+
+# just updated? say so
+if ($script:cfg.LastRunVersion -and $script:cfg.LastRunVersion -ne $AppVersion) {
+    $queue.Enqueue("Updated from $($script:cfg.LastRunVersion) to $AppVersion.")
+    try { Write-SecureLog "App updated from $($script:cfg.LastRunVersion) to $AppVersion" } catch {}
+    try { $tray.ShowBalloonTip(4000, 'PC Optimizer updated', "You're now on version $AppVersion.", [System.Windows.Forms.ToolTipIcon]::Info) } catch {}
+    $script:StatusUntil = (Get-Date).AddSeconds(8); $StatusText.Text = "Updated to version $AppVersion."
+}
+if ($script:cfg.LastRunVersion -ne $AppVersion) { $script:cfg.LastRunVersion = $AppVersion; Save-Config }
 
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMilliseconds(400)

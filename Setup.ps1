@@ -6,12 +6,13 @@
     Settings > Apps so it can be uninstalled like any other app.
     Run it again any time to update. The app's own updater runs it with -Silent.
 #>
-param([switch]$Silent)
+param([switch]$Silent, [switch]$Tray)
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$PSCommandPath`"")
     if ($Silent) { $a += '-Silent' }
+    if ($Tray) { $a += '-Tray' }
     try { Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $a } catch {}
     exit
 }
@@ -101,7 +102,7 @@ namespace PCOpt
 
 function Say([string]$text, [string]$icon = 'Information') { [void][System.Windows.MessageBox]::Show($text, 'PC Optimizer Setup', 'OK', $icon) }
 
-$version = '4.2.0'
+$version = '4.3.0'
 $src     = $PSScriptRoot
 $dest    = Join-Path $env:ProgramFiles 'PC Optimizer'
 $exe     = Join-Path $dest 'PC Optimizer.exe'
@@ -159,8 +160,8 @@ using System.Windows.Forms;
 [assembly: AssemblyTitle("PC Optimizer")]
 [assembly: AssemblyProduct("PC Optimizer")]
 [assembly: AssemblyDescription("PC Optimizer")]
-[assembly: AssemblyVersion("4.2.0.0")]
-[assembly: AssemblyFileVersion("4.2.0.0")]
+[assembly: AssemblyVersion("4.3.0.0")]
+[assembly: AssemblyFileVersion("4.3.0.0")]
 
 namespace PCOptimizer
 {
@@ -278,7 +279,7 @@ namespace PCOptimizer
     if (-not $built) { $msg += "`n`n(The .exe couldn't be built, so the shortcuts start it directly instead. It works the same.`nReason: $buildErr)" }
     if (-not $Silent) { Say $msg }
 
-    if ($built) { Start-Process -FilePath $exe } else { Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-WindowStyle', 'Hidden', '-File', "`"$dest\PC_Optimizer.ps1`"") }
+    if ($built) { if ($Tray) { Start-Process -FilePath $exe -ArgumentList '-StartInTray' } else { Start-Process -FilePath $exe } } else { Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-WindowStyle', 'Hidden', '-File', "`"$dest\PC_Optimizer.ps1`"") }
 } catch {
     Say "Install failed:`n`n$($_.Exception.Message)" 'Error'
     exit 1
